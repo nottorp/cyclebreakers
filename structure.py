@@ -7,6 +7,7 @@
 
 import copy
 import pydot
+import tarjan
 
 def emptymatrix(height, width):
     res = []
@@ -14,6 +15,61 @@ def emptymatrix(height, width):
     for i in xrange(height):
         res.append(copy.deepcopy(line))
     return res
+
+class Prefs:
+    def __init__(self, pref_list):
+        self.pref_list = pref_list
+        self.count = len(pref_list[0])
+        self.wins_matrix = emptymatrix(self.count, self.count + 1)
+        self.adj_matrix = emptymatrix(self.count, self.count + 1)
+        self.adj_lists = {}
+        self.strong_lists = []
+        self.clustered_graph = pydot.Dot(graph_type="digraph")
+
+    def calc_wins_matrix(self):
+        for pref in self.pref_list:
+            for i in xrange(self.count - 1):
+                for j in xrange(i + 1, self.count):
+                    ordleft = ord(pref[i]) - ord('A')
+                    ordright = ord(pref[j]) - ord('A')
+                    #print pref[i], '>', pref[j]
+                    self.wins_matrix[ordleft][ordright] += 1
+        for i in xrange(self.count):
+            for j in xrange(self.count):
+                self.wins_matrix[i][self.count] += self.wins_matrix[i][j]
+    #    for line in self.wins_matrix:
+    #        print line
+
+    def calc_adjacencies(self):
+        # Leave space for strongly connected component number
+        for i in xrange(self.count - 1):
+            for j in xrange(i + 1, self.count):
+                if self.wins_matrix[i][j] > self.wins_matrix[j][i]:
+                    self.adj_matrix[i][j] = 1
+                else:
+                    self.adj_matrix[j][i] = 1
+        # And do the adjacency lists here too
+        for i in xrange(self.count):
+            tmplist = []
+            for j in xrange(self.count):
+                if self.adj_matrix[i][j] == 1:
+                    tmplist.append(j)
+            self.adj_lists[i] = tmplist
+
+    def do_tarjan(self):
+        self.strong_lists = tarjan.tarjan(self.adj_lists)
+
+    def clustered_dot(self):
+        idx = 0
+        for strong in self.strong_lists:
+            tmpcluster = pydot.Cluster('Cluster_' + chr(ord('A') + idx))
+            idx += 1
+            for node in strong:
+                tmpcluster.add_node(pydot.Node(chr(node + ord('A'))))
+            self.clustered_graph.add_subgraph(tmpcluster)
+        for src, dest in self.adj_lists.iteritems():
+            for dest_node in dest:
+                self.clustered_graph.add_edge(pydot.Edge(chr(src + ord('A')), chr(dest_node + ord('A'))))
 
 def alt2matrix(alts):
     count = len(alts[0])
@@ -34,7 +90,8 @@ def alt2matrix(alts):
     return mat
 
 def matrix2adjmatrix(mat):
-    adj = emptymatrix(len(mat), len(mat))
+    # Leave space for strongly connected component number
+    adj = emptymatrix(len(mat), len(mat) + 1)
     for i in xrange(len(mat) - 1):
         for j in xrange(i + 1, len(mat)):
             if mat[i][j] > mat[j][i]:
@@ -43,8 +100,22 @@ def matrix2adjmatrix(mat):
                 adj[j][i] = 1
     return adj
 
+def run_tarjan(mat):
+    # Build adjacency lists
+    tarjan_dict = {}
+    for i in xrange(len(mat)):
+        tmplist = []
+        for j in xrange(len(mat)):
+            if mat[i][j] == 1:
+                tmplist.append(j)
+        tarjan_dict[i] = tmplist
+    return tarjan.tarjan(tarjan_dict)
+
+
 def adjmatrix2dot(adj):
     graph = pydot.Dot(graph_type = 'digraph')
+    for i in xrange(len(adj)):
+        graph.add_node(pydot.Node(chr(i + ord("A"))))
     for i in xrange(len(adj)):
         for j in xrange(len(adj)):
             if adj[i][j] == 1:
@@ -54,8 +125,29 @@ def adjmatrix2dot(adj):
     return graph
 
 test = ["ABCD", "BCAD", "CABD"]
-mat = alt2matrix(test)
-adj = matrix2adjmatrix(mat)
-graph = adjmatrix2dot(adj)
+#mat = alt2matrix(test)
+#adj = matrix2adjmatrix(mat)
+#run_tarjan(adj)
+#graph = adjmatrix2dot(adj)
+#graph.write_png("graph.png")
 
-graph.write_png("graph.png")
+p = Prefs(test)
+p.calc_wins_matrix()
+p.calc_adjacencies()
+p.do_tarjan()
+p.clustered_dot()
+
+p.clustered_graph.write_raw("clustered_graph.dot")
+
+p.clustered_graph.write_png("clustered_graph.png")
+
+print "Wins matrix"
+for line in p.wins_matrix:
+    print line
+print "Adjacency matrix"
+for line in p.adj_matrix:
+    print line
+print "Ajacency lists"
+print p.adj_lists
+print "Strongly connected components"
+print p.strong_lists
