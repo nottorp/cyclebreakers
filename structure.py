@@ -39,17 +39,20 @@ class Prefs:
         for i in xrange(self.count):
             for j in xrange(self.count):
                 self.wins_matrix[i][self.count] += self.wins_matrix[i][j]
-    #    for line in self.wins_matrix:
-    #        print line
+        #for line in self.wins_matrix:
+        #    print line
 
     def calc_adjacencies(self):
-        # Leave space for strongly connected component number
         for i in xrange(self.count - 1):
             for j in xrange(i + 1, self.count):
                 if self.wins_matrix[i][j] > self.wins_matrix[j][i]:
                     self.adj_matrix[i][j] = 1
                 else:
                     self.adj_matrix[j][i] = 1
+        # Count total wins here as well
+        for i in xrange(self.count):
+            for j in xrange(self.count):
+                self.adj_matrix[i][self.count] += self.adj_matrix[i][j]
         # And do the adjacency lists here too
         for i in xrange(self.count):
             tmplist = []
@@ -65,8 +68,8 @@ class Prefs:
         # Find the nodes winning the most direct comparisons
         self.max_wins = 0
         for i in xrange(self.count):
-            if self.wins_matrix[i][self.count] > self.max_wins:
-                self.max_wins = self.wins_matrix[i][self.count]
+            if self.adj_matrix[i][self.count] > self.max_wins:
+                self.max_wins = self.adj_matrix[i][self.count]
 
     def clustered_dot(self):
         idx = 0
@@ -74,14 +77,25 @@ class Prefs:
             tmpcluster = pydot.Cluster('Cluster_' + chr(ord('A') + idx))
             idx += 1
             for node in strong:
-                if self.wins_matrix[node][self.count] == self.max_wins:
-                    tmpcluster.add_node(pydot.Node(chr(node + ord('A')), color='red'))
+                node_wins = self.adj_matrix[node][self.count]
+                node_name = chr(node + ord('A'))
+                node_label = node_name + " (" + str(node_wins) + ")"
+                if node_wins == self.max_wins:
+                    tmpcluster.add_node(pydot.Node(node_name, color='red', label = node_label))
                 else:
-                    tmpcluster.add_node(pydot.Node(chr(node + ord('A'))))
+                    tmpcluster.add_node(pydot.Node(node_name, label = node_label))
             self.clustered_graph.add_subgraph(tmpcluster)
         for src, dest in self.adj_lists.iteritems():
             for dest_node in dest:
                 self.clustered_graph.add_edge(pydot.Edge(chr(src + ord('A')), chr(dest_node + ord('A'))))
+
+    def all_processing(self):
+        self.calc_wins_matrix()
+        self.calc_adjacencies()
+        self.do_tarjan()
+        self.id_condorcet()
+        self.clustered_dot()
+
 
 def alt2matrix(alts):
     count = len(alts[0])
@@ -135,33 +149,17 @@ def adjmatrix2dot(adj):
                 graph.add_edge(pydot.Edge(labelleft, labelright))
     return graph
 
+def run_one(pref_list, graph_name):
+    p = Prefs(pref_list, name=graph_name)
+    p.all_processing()
+    p.clustered_graph.write_png(graph_name + ".png")
+
 test_simple = ["ABCD", "BCAD", "CABD"]
 test_2cycles = ["ABCDEFG", "BCAEFDG", "CABFDEG"]
-test_condorcet_not_cycle = ["ABCD", "BADC", "BCAD", "BDAC", "CABD", "CABD", "CBDA", "DABC", "DABC", "DBCA", "DCAB", "DCAB"]
-#mat = alt2matrix(test)
-#adj = matrix2adjmatrix(mat)
-#run_tarjan(adj)
-#graph = adjmatrix2dot(adj)
-#graph.write_png("graph.png")
+test_condorcet_not_cycle = ["ABCDE", "BADCE", "BCADE", "BDACE", "CABDE", "CABDE", "CBDAE", "DABCE", "DABCE", "DBCAE", "DCABE", "DCABE"]
+test_clear_winner = ["ABCDE", "ACDBE", "ADBCE"]
 
-p = Prefs(test_condorcet_not_cycle)
-p.calc_wins_matrix()
-p.calc_adjacencies()
-p.do_tarjan()
-p.id_condorcet()
-p.clustered_dot()
-
-p.clustered_graph.write_raw("clustered_graph.dot")
-
-p.clustered_graph.write_png("clustered_graph.png")
-
-print "Wins matrix"
-for line in p.wins_matrix:
-    print line
-print "Adjacency matrix"
-for line in p.adj_matrix:
-    print line
-print "Ajacency lists"
-print p.adj_lists
-print "Strongly connected components"
-print p.strong_lists
+run_one(test_simple, "graph_simple_test")
+run_one(test_2cycles, "graph_two_cycles_and_extra")
+run_one(test_condorcet_not_cycle, "graph_top_cycle_condorcet_cycle")
+run_one(test_clear_winner, "graph_clear_winner")
