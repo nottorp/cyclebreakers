@@ -17,7 +17,8 @@ def emptymatrix(height, width):
     return res
 
 class Prefs:
-    def __init__(self, pref_list):
+    def __init__(self, pref_list, name="Preference Profile"):
+        self.name = name
         self.pref_list = pref_list
         self.count = len(pref_list[0])
         self.wins_matrix = emptymatrix(self.count, self.count + 1)
@@ -25,6 +26,7 @@ class Prefs:
         self.adj_lists = {}
         self.strong_lists = []
         self.clustered_graph = pydot.Dot(graph_type="digraph")
+        self.max_wins = 0
 
     def calc_wins_matrix(self):
         for pref in self.pref_list:
@@ -59,13 +61,23 @@ class Prefs:
     def do_tarjan(self):
         self.strong_lists = tarjan.tarjan(self.adj_lists)
 
+    def id_condorcet(self):
+        # Find the nodes winning the most direct comparisons
+        self.max_wins = 0
+        for i in xrange(self.count):
+            if self.wins_matrix[i][self.count] > self.max_wins:
+                self.max_wins = self.wins_matrix[i][self.count]
+
     def clustered_dot(self):
         idx = 0
         for strong in self.strong_lists:
             tmpcluster = pydot.Cluster('Cluster_' + chr(ord('A') + idx))
             idx += 1
             for node in strong:
-                tmpcluster.add_node(pydot.Node(chr(node + ord('A'))))
+                if self.wins_matrix[node][self.count] == self.max_wins:
+                    tmpcluster.add_node(pydot.Node(chr(node + ord('A')), color='red'))
+                else:
+                    tmpcluster.add_node(pydot.Node(chr(node + ord('A'))))
             self.clustered_graph.add_subgraph(tmpcluster)
         for src, dest in self.adj_lists.iteritems():
             for dest_node in dest:
@@ -111,9 +123,8 @@ def run_tarjan(mat):
         tarjan_dict[i] = tmplist
     return tarjan.tarjan(tarjan_dict)
 
-
 def adjmatrix2dot(adj):
-    graph = pydot.Dot(graph_type = 'digraph')
+    graph = pydot.Dot(graph_type = 'digraph', rankdir="TB")
     for i in xrange(len(adj)):
         graph.add_node(pydot.Node(chr(i + ord("A"))))
     for i in xrange(len(adj)):
@@ -124,17 +135,20 @@ def adjmatrix2dot(adj):
                 graph.add_edge(pydot.Edge(labelleft, labelright))
     return graph
 
-test = ["ABCD", "BCAD", "CABD"]
+test_simple = ["ABCD", "BCAD", "CABD"]
+test_2cycles = ["ABCDEFG", "BCAEFDG", "CABFDEG"]
+test_condorcet_not_cycle = ["ABCD", "BADC", "BCAD", "BDAC", "CABD", "CABD", "CBDA", "DABC", "DABC", "DBCA", "DCAB", "DCAB"]
 #mat = alt2matrix(test)
 #adj = matrix2adjmatrix(mat)
 #run_tarjan(adj)
 #graph = adjmatrix2dot(adj)
 #graph.write_png("graph.png")
 
-p = Prefs(test)
+p = Prefs(test_condorcet_not_cycle)
 p.calc_wins_matrix()
 p.calc_adjacencies()
 p.do_tarjan()
+p.id_condorcet()
 p.clustered_dot()
 
 p.clustered_graph.write_raw("clustered_graph.dot")
